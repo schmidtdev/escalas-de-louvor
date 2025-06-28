@@ -1,15 +1,11 @@
 {
-  "env": {
-    "NEXTAUTH_URL": "@nextauth_url",
-    "NEXTAUTH_SECRET": "@nextauth_secret"
-  },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         {
           "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=(), interest-cohort=(), accelerometer=(), autoplay=(), clipboard-read=(), clipboard-write=(), display-capture=(), encrypted-media=(), fullscreen=(), gyroscope=(), magnetometer=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), web-share=()"
+          "value": "interest-cohort=()"
         }
       ]
     }
