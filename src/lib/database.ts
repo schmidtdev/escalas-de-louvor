@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin } from './supabase.ts';
+import { getSupabase, getSupabaseAdmin } from './supabase';
 import bcrypt from 'bcryptjs';
 
 // Types
@@ -81,7 +81,7 @@ CREATE POLICY "Allow authenticated users" ON escalas FOR ALL USING (true);
 // Funções para usuários
 export const userQueries = {
   async create(email: string, password: string, name: string, role: string = 'admin') {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('users')
       .insert({ email, password, name, role })
       .select()
@@ -92,7 +92,7 @@ export const userQueries = {
   },
 
   async findByEmail(email: string) {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('users')
       .select('*')
       .eq('email', email)
@@ -103,7 +103,7 @@ export const userQueries = {
   },
 
   async findById(id: string) {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('users')
       .select('*')
       .eq('id', id)
@@ -114,7 +114,7 @@ export const userQueries = {
   },
 
   async count() {
-    const { count, error } = await supabaseAdmin
+    const { count, error } = await getSupabaseAdmin()
       .from('users')
       .select('*', { count: 'exact', head: true });
     
@@ -126,7 +126,7 @@ export const userQueries = {
 // Funções para pessoas
 export const pessoaQueries = {
   async getAll() {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('pessoas')
       .select('*')
       .order('nome');
@@ -136,7 +136,7 @@ export const pessoaQueries = {
   },
 
   async create(nome: string, tipo: string, instrumentos: string[]) {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('pessoas')
       .insert({ nome, tipo, instrumentos })
       .select()
@@ -147,7 +147,7 @@ export const pessoaQueries = {
   },
 
   async delete(id: number) {
-    const { error } = await supabase
+    const { error } = await getSupabase()
       .from('pessoas')
       .delete()
       .eq('id', id);
@@ -156,7 +156,7 @@ export const pessoaQueries = {
   },
 
   async findById(id: number) {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('pessoas')
       .select('*')
       .eq('id', id)
@@ -170,7 +170,7 @@ export const pessoaQueries = {
 // Funções para escalas
 export const escalaQueries = {
   async getAll() {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('escalas')
       .select(`
         *,
@@ -185,7 +185,7 @@ export const escalaQueries = {
     if (error) throw error;
     
     // Processar os dados para manter compatibilidade com o formato anterior
-    return data.map(escala => ({
+    return data.map((escala: any) => ({
       ...escala,
       ministro_nome: escala.ministro?.nome,
       violao_nome: escala.violao?.nome,
@@ -196,7 +196,7 @@ export const escalaQueries = {
   },
 
   async create(data: string, periodo: string | null, ministro_id: number | null, back_vocals: number[], violao_id: number | null, teclado_id: number | null, baixo_id: number | null, bateria_id: number | null) {
-    const { data: result, error } = await supabase
+    const { data: result, error } = await getSupabase()
       .from('escalas')
       .insert({
         data,
@@ -216,7 +216,7 @@ export const escalaQueries = {
   },
 
   async update(id: number, data: string, periodo: string | null, ministro_id: number | null, back_vocals: number[], violao_id: number | null, teclado_id: number | null, baixo_id: number | null, bateria_id: number | null) {
-    const { data: result, error } = await supabase
+    const { data: result, error } = await getSupabase()
       .from('escalas')
       .update({
         data,
@@ -237,7 +237,7 @@ export const escalaQueries = {
   },
 
   async delete(id: number) {
-    const { error } = await supabase
+    const { error } = await getSupabase()
       .from('escalas')
       .delete()
       .eq('id', id);
@@ -246,7 +246,7 @@ export const escalaQueries = {
   },
 
   async findById(id: number) {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('escalas')
       .select('*')
       .eq('id', id)

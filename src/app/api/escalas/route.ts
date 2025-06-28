@@ -15,9 +15,9 @@ export async function GET() {
     const pessoas = await pessoaQueries.getAll();
 
     // Converter para formato do frontend
-    const escalasFormatadas = escalas.map(escala => {
+    const escalasFormatadas = escalas.map((escala: any) => {
       const backVocalsIds = escala.back_vocals || [];
-      const backVocals = pessoas.filter(p => backVocalsIds.includes(p.id));
+      const backVocals = pessoas.filter((p: any) => backVocalsIds.includes(p.id));
 
       return {
         id: escala.id.toString(),
