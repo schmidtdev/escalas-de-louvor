@@ -16,7 +16,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const user = userQueries.findByEmail.get(credentials.email) as any;
+          const user = await userQueries.findByEmail(credentials.email);
           
           if (!user) {
             return null;
@@ -68,17 +68,6 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
   secret: process.env.NEXTAUTH_SECRET || 'dev-secret-key',
-  // Configurações específicas para produção
-  useSecureCookies: process.env.NODE_ENV === 'production',
-  cookies: {
-    sessionToken: {
-      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-      },
-    },
-  },
+  // Configuração simplificada para evitar problemas na Vercel
+  debug: process.env.NODE_ENV === 'development',
 };

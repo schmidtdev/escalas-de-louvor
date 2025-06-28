@@ -11,18 +11,18 @@ export async function GET() {
   }
 
   try {
-    const escalas = escalaQueries.getAll.all() as any[];
-    const pessoas = pessoaQueries.getAll.all() as any[];
+    const escalas = await escalaQueries.getAll();
+    const pessoas = await pessoaQueries.getAll();
 
     // Converter para formato do frontend
     const escalasFormatadas = escalas.map(escala => {
-      const backVocalsIds = escala.back_vocals ? JSON.parse(escala.back_vocals) : [];
+      const backVocalsIds = escala.back_vocals || [];
       const backVocals = pessoas.filter(p => backVocalsIds.includes(p.id));
 
       return {
         id: escala.id.toString(),
         data: escala.data,
-        periodo: escala.periodo || undefined, // Incluir o campo período
+        periodo: escala.periodo || undefined,
         ministro: escala.ministro_id ? {
           id: escala.ministro_id.toString(),
           nome: escala.ministro_nome,
@@ -86,18 +86,17 @@ export async function POST(request: NextRequest) {
 
     const ministroId = ministro ? parseInt(ministro.id) : null;
     const backVocalsIds = backVocals?.length > 0 ? backVocals.map((bv: any) => parseInt(bv.id)) : [];
-    const backVocalsJson = JSON.stringify(backVocalsIds);
     
     const violaoId = musicos?.violao ? parseInt(musicos.violao.id) : null;
     const tecladoId = musicos?.teclado ? parseInt(musicos.teclado.id) : null;
     const baixoId = musicos?.baixo ? parseInt(musicos.baixo.id) : null;
     const bateriaId = musicos?.bateria ? parseInt(musicos.bateria.id) : null;
 
-    const result = escalaQueries.create.run(
+    const result = await escalaQueries.create(
       data,
       periodoFinal,
       ministroId,
-      backVocalsJson,
+      backVocalsIds,
       violaoId,
       tecladoId,
       baixoId,
@@ -105,7 +104,7 @@ export async function POST(request: NextRequest) {
     );
     
     return NextResponse.json({ 
-      id: result.lastInsertRowid.toString(),
+      id: result.id.toString(),
       data,
       periodo: periodoFinal,
       ministro,
@@ -139,23 +138,22 @@ export async function PATCH(request: NextRequest) {
 
     const ministroId = ministro ? parseInt(ministro.id) : null;
     const backVocalsIds = backVocals?.length > 0 ? backVocals.map((bv: any) => parseInt(bv.id)) : [];
-    const backVocalsJson = JSON.stringify(backVocalsIds);
     
     const violaoId = musicos?.violao ? parseInt(musicos.violao.id) : null;
     const tecladoId = musicos?.teclado ? parseInt(musicos.teclado.id) : null;
     const baixoId = musicos?.baixo ? parseInt(musicos.baixo.id) : null;
     const bateriaId = musicos?.bateria ? parseInt(musicos.bateria.id) : null;
 
-    escalaQueries.update.run(
+    await escalaQueries.update(
+      parseInt(id),
       data,
       periodoFinal,
       ministroId,
-      backVocalsJson,
+      backVocalsIds,
       violaoId,
       tecladoId,
       baixoId,
-      bateriaId,
-      parseInt(id)
+      bateriaId
     );
     
     return NextResponse.json({ 
@@ -187,7 +185,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID é obrigatório' }, { status: 400 });
     }
 
-    escalaQueries.delete.run(parseInt(id));
+    await escalaQueries.delete(parseInt(id));
     
     return NextResponse.json({ success: true });
   } catch (error) {

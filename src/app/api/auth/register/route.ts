@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o usuário já existe
-    const existingUser = userQueries.findByEmail.get(email);
+    const existingUser = await userQueries.findByEmail(email);
     if (existingUser) {
       return NextResponse.json({ error: 'Este email já está em uso' }, { status: 400 });
     }
@@ -23,11 +23,11 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(password);
 
     // Criar usuário
-    const result = userQueries.create.run(email, hashedPassword, name, 'admin');
+    const result = await userQueries.create(email, hashedPassword, name, 'admin');
 
     return NextResponse.json({ 
       message: 'Usuário criado com sucesso',
-      userId: result.lastInsertRowid 
+      userId: result.id 
     }, { status: 201 });
   } catch (error) {
     console.error('Erro ao criar usuário:', error);

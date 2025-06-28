@@ -13,10 +13,6 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
-  },
-  // Configuração específica para produção na Vercel
-  experimental: {
-    serverComponentsExternalPackages: ['better-sqlite3']
   }
 };
 

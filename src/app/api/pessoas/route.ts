@@ -11,13 +11,12 @@ export async function GET() {
   }
 
   try {
-    const pessoas = pessoaQueries.getAll.all() as any[];
+    const pessoas = await pessoaQueries.getAll();
     
-    // Converter instrumentos de JSON string para array e IDs para string
+    // Converter IDs para string para compatibilidade com o frontend
     const pessoasFormatadas = pessoas.map((pessoa: any) => ({
       ...pessoa,
-      id: pessoa.id.toString(), // Converter ID para string
-      instrumentos: pessoa.instrumentos ? JSON.parse(pessoa.instrumentos) : undefined
+      id: pessoa.id.toString()
     }));
 
     return NextResponse.json(pessoasFormatadas);
@@ -41,15 +40,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nome e tipo são obrigatórios' }, { status: 400 });
     }
 
-    const instrumentosJson = instrumentos ? JSON.stringify(instrumentos) : null;
-    
-    const result = pessoaQueries.create.run(nome, tipo, instrumentosJson);
+    const result = await pessoaQueries.create(nome, tipo, instrumentos || []);
     
     return NextResponse.json({ 
-      id: result.lastInsertRowid,
-      nome,
-      tipo,
-      instrumentos: instrumentos || undefined
+      id: result.id.toString(),
+      nome: result.nome,
+      tipo: result.tipo,
+      instrumentos: result.instrumentos
     }, { status: 201 });
   } catch (error) {
     console.error('Erro ao criar pessoa:', error);
@@ -72,7 +69,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID é obrigatório' }, { status: 400 });
     }
 
-    pessoaQueries.delete.run(id);
+    await pessoaQueries.delete(parseInt(id));
     
     return NextResponse.json({ success: true });
   } catch (error) {

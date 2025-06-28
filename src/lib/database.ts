@@ -1,158 +1,276 @@
-import Database from 'better-sqlite3';
+import { supabase, supabaseAdmin } from './supabase.ts';
 import bcrypt from 'bcryptjs';
-import path from 'path';
 
-// Caminho do banco de dados
-const dbPath = path.join(process.cwd(), 'database.sqlite');
-const db = new Database(dbPath);
-
-// Inicializar tabelas
-export function initializeDatabase() {
-  // Tabela de usuários
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      name TEXT NOT NULL,
-      role TEXT DEFAULT 'admin',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Tabela de pessoas
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pessoas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT NOT NULL,
-      tipo TEXT NOT NULL CHECK (tipo IN ('ministro', 'vocal', 'musico')),
-      instrumentos TEXT, -- JSON string para array de instrumentos
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Tabela de escalas
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS escalas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      data TEXT NOT NULL,
-      periodo TEXT, -- 'manha' ou 'noite' para domingos
-      ministro_id INTEGER,
-      back_vocals TEXT, -- JSON string para array de IDs
-      violao_id INTEGER,
-      teclado_id INTEGER,
-      baixo_id INTEGER,
-      bateria_id INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (ministro_id) REFERENCES pessoas (id),
-      FOREIGN KEY (violao_id) REFERENCES pessoas (id),
-      FOREIGN KEY (teclado_id) REFERENCES pessoas (id),
-      FOREIGN KEY (baixo_id) REFERENCES pessoas (id),
-      FOREIGN KEY (bateria_id) REFERENCES pessoas (id)
-    )
-  `);
-
-  // Adicionar coluna periodo se não existir (para escalas existentes)
-  try {
-    db.exec(`ALTER TABLE escalas ADD COLUMN periodo TEXT`);
-  } catch (error) {
-    // Coluna já existe, ignorar erro
-  }
+// Types
+export interface User {
+  id: string;
+  email: string;
+  password: string;
+  name: string;
+  role: string;
+  created_at: string;
 }
 
-// Inicializar banco imediatamente
-initializeDatabase();
+export interface Pessoa {
+  id: number;
+  nome: string;
+  tipo: 'ministro' | 'vocal' | 'musico';
+  instrumentos: string[];
+  created_at: string;
+}
+
+export interface Escala {
+  id: number;
+  data: string;
+  periodo?: string;
+  ministro_id?: number;
+  back_vocals: number[];
+  violao_id?: number;
+  teclado_id?: number;
+  baixo_id?: number;
+  bateria_id?: number;
+  created_at: string;
+}
+
+// Função para inicializar as tabelas (SQL para executar no Supabase)
+export const initializeDatabaseSQL = `
+-- Tabela de usuários
+CREATE TABLE IF NOT EXISTS users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT DEFAULT 'admin',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabela de pessoas
+CREATE TABLE IF NOT EXISTS pessoas (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('ministro', 'vocal', 'musico')),
+  instrumentos JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabela de escalas
+CREATE TABLE IF NOT EXISTS escalas (
+  id SERIAL PRIMARY KEY,
+  data DATE NOT NULL,
+  periodo TEXT,
+  ministro_id INTEGER REFERENCES pessoas(id),
+  back_vocals JSONB DEFAULT '[]'::jsonb,
+  violao_id INTEGER REFERENCES pessoas(id),
+  teclado_id INTEGER REFERENCES pessoas(id),
+  baixo_id INTEGER REFERENCES pessoas(id),
+  bateria_id INTEGER REFERENCES pessoas(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS (Row Level Security) policies
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pessoas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE escalas ENABLE ROW LEVEL SECURITY;
+
+-- Policies para permitir acesso autenticado
+CREATE POLICY "Allow authenticated users" ON users FOR ALL USING (true);
+CREATE POLICY "Allow authenticated users" ON pessoas FOR ALL USING (true);
+CREATE POLICY "Allow authenticated users" ON escalas FOR ALL USING (true);
+`;
 
 // Funções para usuários
 export const userQueries = {
-  create: db.prepare(`
-    INSERT INTO users (email, password, name, role)
-    VALUES (?, ?, ?, ?)
-  `),
-  
-  findByEmail: db.prepare(`
-    SELECT * FROM users WHERE email = ?
-  `),
-  
-  findById: db.prepare(`
-    SELECT * FROM users WHERE id = ?
-  `),
-  
-  count: db.prepare(`
-    SELECT COUNT(*) as count FROM users
-  `)
+  async create(email: string, password: string, name: string, role: string = 'admin') {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .insert({ email, password, name, role })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async findByEmail(email: string) {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+    return data;
+  },
+
+  async findById(id: string) {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  async count() {
+    const { count, error } = await supabaseAdmin
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+    
+    if (error) throw error;
+    return { count: count || 0 };
+  }
 };
 
 // Funções para pessoas
 export const pessoaQueries = {
-  getAll: db.prepare(`
-    SELECT * FROM pessoas ORDER BY nome
-  `),
-  
-  create: db.prepare(`
-    INSERT INTO pessoas (nome, tipo, instrumentos)
-    VALUES (?, ?, ?)
-  `),
-  
-  delete: db.prepare(`
-    DELETE FROM pessoas WHERE id = ?
-  `),
-  
-  findById: db.prepare(`
-    SELECT * FROM pessoas WHERE id = ?
-  `)
+  async getAll() {
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select('*')
+      .order('nome');
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async create(nome: string, tipo: string, instrumentos: string[]) {
+    const { data, error } = await supabase
+      .from('pessoas')
+      .insert({ nome, tipo, instrumentos })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: number) {
+    const { error } = await supabase
+      .from('pessoas')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  },
+
+  async findById(id: number) {
+    const { data, error } = await supabase
+      .from('pessoas')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  }
 };
 
 // Funções para escalas
 export const escalaQueries = {
-  getAll: db.prepare(`
-    SELECT e.*, 
-           m.nome as ministro_nome,
-           v.nome as violao_nome,
-           t.nome as teclado_nome,
-           b.nome as baixo_nome,
-           d.nome as bateria_nome
-    FROM escalas e
-    LEFT JOIN pessoas m ON e.ministro_id = m.id
-    LEFT JOIN pessoas v ON e.violao_id = v.id
-    LEFT JOIN pessoas t ON e.teclado_id = t.id
-    LEFT JOIN pessoas b ON e.baixo_id = b.id
-    LEFT JOIN pessoas d ON e.bateria_id = d.id
-    ORDER BY e.data
-  `),
-  
-  create: db.prepare(`
-    INSERT INTO escalas (data, periodo, ministro_id, back_vocals, violao_id, teclado_id, baixo_id, bateria_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `),
-  
-  update: db.prepare(`
-    UPDATE escalas 
-    SET data = ?, periodo = ?, ministro_id = ?, back_vocals = ?, violao_id = ?, teclado_id = ?, baixo_id = ?, bateria_id = ?
-    WHERE id = ?
-  `),
-  
-  delete: db.prepare(`
-    DELETE FROM escalas WHERE id = ?
-  `),
-  
-  findById: db.prepare(`
-    SELECT * FROM escalas WHERE id = ?
-  `)
+  async getAll() {
+    const { data, error } = await supabase
+      .from('escalas')
+      .select(`
+        *,
+        ministro:pessoas!escalas_ministro_id_fkey(nome),
+        violao:pessoas!escalas_violao_id_fkey(nome),
+        teclado:pessoas!escalas_teclado_id_fkey(nome),
+        baixo:pessoas!escalas_baixo_id_fkey(nome),
+        bateria:pessoas!escalas_bateria_id_fkey(nome)
+      `)
+      .order('data');
+    
+    if (error) throw error;
+    
+    // Processar os dados para manter compatibilidade com o formato anterior
+    return data.map(escala => ({
+      ...escala,
+      ministro_nome: escala.ministro?.nome,
+      violao_nome: escala.violao?.nome,
+      teclado_nome: escala.teclado?.nome,
+      baixo_nome: escala.baixo?.nome,
+      bateria_nome: escala.bateria?.nome
+    }));
+  },
+
+  async create(data: string, periodo: string | null, ministro_id: number | null, back_vocals: number[], violao_id: number | null, teclado_id: number | null, baixo_id: number | null, bateria_id: number | null) {
+    const { data: result, error } = await supabase
+      .from('escalas')
+      .insert({
+        data,
+        periodo,
+        ministro_id,
+        back_vocals,
+        violao_id,
+        teclado_id,
+        baixo_id,
+        bateria_id
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return result;
+  },
+
+  async update(id: number, data: string, periodo: string | null, ministro_id: number | null, back_vocals: number[], violao_id: number | null, teclado_id: number | null, baixo_id: number | null, bateria_id: number | null) {
+    const { data: result, error } = await supabase
+      .from('escalas')
+      .update({
+        data,
+        periodo,
+        ministro_id,
+        back_vocals,
+        violao_id,
+        teclado_id,
+        baixo_id,
+        bateria_id
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return result;
+  },
+
+  async delete(id: number) {
+    const { error } = await supabase
+      .from('escalas')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  },
+
+  async findById(id: number) {
+    const { data, error } = await supabase
+      .from('escalas')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  }
 };
 
 // Função para criar usuário admin inicial
 export async function createInitialAdmin() {
-  const userCount = userQueries.count.get() as { count: number };
-  
-  if (userCount.count === 0) {
-    const hashedPassword = await bcrypt.hash('IANRLouvor', 12);
-    userQueries.create.run('admin@ianr.com.br', hashedPassword, 'Administrador', 'admin');
+  try {
+    const userCount = await userQueries.count();
+    
+    if (userCount.count === 0) {
+      const hashedPassword = await bcrypt.hash('IANRLouvor', 12);
+      await userQueries.create('admin@ianr.com.br', hashedPassword, 'Administrador', 'admin');
+      console.log('Admin inicial criado com sucesso');
+    }
+  } catch (error) {
+    console.error('Erro ao criar admin inicial:', error);
   }
 }
-
-// Criar admin inicial
-createInitialAdmin();
 
 // Função para verificar senha
 export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
@@ -163,5 +281,3 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }
-
-export default db;
